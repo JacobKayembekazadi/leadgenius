@@ -499,7 +499,7 @@ with tab3:
                                 st.text_input(
                                     "Subject Line:",
                                     value=message['email_subject'],
-                                    key=f"subject_{idx}",
+                                    key=f"ai_subject_{idx}",
                                     help="Email subject line"
                                 )
                             st.text_area(
@@ -695,7 +695,7 @@ with tab5:
                         email_subject = st.text_input(
                             "Email Subject:",
                             value=f"Business Growth Opportunity for {lead['business_name']}",
-                            key=f"subject_{idx}"
+                            key=f"hitl_subject_{idx}"
                         )
                     
                     with col2:
