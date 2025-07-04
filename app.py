@@ -376,7 +376,29 @@ with tab3:
                                 outreach_results = generate_bulk_outreach(selected_leads, gemini_api_key)
                                 
                                 if outreach_results is not None and not outreach_results.empty:
-                                    st.success(f"✅ Generated outreach for {len(outreach_results)} leads!")
+                                    # Display generation analytics
+                                    analytics = getattr(outreach_results, 'attrs', {}).get('analytics', {})
+                                    
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    with col1:
+                                        st.metric("Success Rate", f"{analytics.get('success_rate', 0)}%")
+                                    with col2:
+                                        st.metric("Avg Confidence", f"{analytics.get('avg_confidence_score', 0)}/10")
+                                    with col3:
+                                        st.metric("High Quality", f"{analytics.get('high_confidence_count', 0)}")
+                                    with col4:
+                                        st.metric("Generated", f"{len(outreach_results)}")
+                                    
+                                    # Show personalization angles
+                                    if analytics.get('personalization_angles'):
+                                        st.subheader("🎯 Personalization Strategies Used")
+                                        angles_data = analytics['personalization_angles']
+                                        cols = st.columns(min(len(angles_data), 3))
+                                        for i, (angle, count) in enumerate(angles_data.items()):
+                                            with cols[i % 3]:
+                                                st.info(f"**{angle}**: {count} leads")
+                                    
+                                    st.success(f"✅ Generated personalized outreach for {len(outreach_results)} leads!")
                                     
                                     # Save results to session state for display
                                     if 'outreach_messages' not in st.session_state:
@@ -411,12 +433,31 @@ with tab3:
                 st.divider()
                 st.subheader("📧 Generated Outreach Messages")
                 
+                # Analytics overview
+                messages_df = st.session_state.outreach_messages
+                if 'confidence_score' in messages_df.columns:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        avg_confidence = messages_df['confidence_score'].mean()
+                        st.metric("Overall Confidence", f"{avg_confidence:.1f}/10")
+                    with col2:
+                        high_quality = len(messages_df[messages_df['confidence_score'] >= 8])
+                        st.metric("High Quality Messages", f"{high_quality}/{len(messages_df)}")
+                    with col3:
+                        avg_email_words = messages_df.get('word_count_email', pd.Series([0])).mean()
+                        st.metric("Avg Email Length", f"{avg_email_words:.0f} words")
+                    with col4:
+                        if 'personalization_angle' in messages_df.columns:
+                            unique_strategies = messages_df['personalization_angle'].nunique()
+                            st.metric("Strategy Variety", f"{unique_strategies} types")
+                
                 # Search and filter outreach messages
                 col1, col2 = st.columns([2, 1])
                 with col1:
                     search_outreach = st.text_input("🔍 Search outreach messages", placeholder="Search by business name...")
                 with col2:
-                    sort_outreach = st.selectbox("Sort by", ["generated_at", "business_name"], key="sort_outreach")
+                    sort_options = ["generated_at", "business_name", "confidence_score"]
+                    sort_outreach = st.selectbox("Sort by", sort_options, key="sort_outreach")
                 
                 # Apply filters
                 filtered_outreach = st.session_state.outreach_messages.copy()
@@ -429,15 +470,42 @@ with tab3:
                 
                 # Display messages
                 for idx, message in filtered_outreach.iterrows():
-                    with st.expander(f"📧 {message['business_name']} - Generated {message['generated_at']}"):
+                    # Create title with confidence indicator
+                    confidence = message.get('confidence_score', 5)
+                    confidence_emoji = "🎯" if confidence >= 8 else "⚡" if confidence >= 6 else "📝"
+                    title = f"{confidence_emoji} {message['business_name']} - Confidence: {confidence}/10"
+                    
+                    with st.expander(title):
+                        # Analytics row
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Confidence", f"{confidence}/10")
+                        with col2:
+                            st.metric("Email Words", message.get('word_count_email', 0))
+                        with col3:
+                            st.metric("LinkedIn Words", message.get('word_count_linkedin', 0))
+                        with col4:
+                            st.write("**Strategy:**")
+                            st.write(message.get('personalization_angle', 'Unknown'))
+                        
+                        st.divider()
+                        
+                        # Messages
                         col1, col2 = st.columns(2)
                         
                         with col1:
                             st.subheader("📧 Email Message")
+                            if 'email_subject' in message and message['email_subject']:
+                                st.text_input(
+                                    "Subject Line:",
+                                    value=message['email_subject'],
+                                    key=f"subject_{idx}",
+                                    help="Email subject line"
+                                )
                             st.text_area(
                                 "Email Body:",
                                 value=message['email_body'],
-                                height=150,
+                                height=120,
                                 key=f"email_{idx}",
                                 help="Copy this message for your email outreach"
                             )
@@ -452,7 +520,7 @@ with tab3:
                                 help="Copy this message for LinkedIn outreach"
                             )
                         
-                        # Copy buttons
+                        # Copy buttons and quality indicator
                         col1, col2, col3 = st.columns([1, 1, 2])
                         with col1:
                             if st.button(f"📋 Copy Email", key=f"copy_email_{idx}"):
@@ -460,6 +528,10 @@ with tab3:
                         with col2:
                             if st.button(f"📋 Copy LinkedIn", key=f"copy_linkedin_{idx}"):
                                 st.write("LinkedIn message copied to display above ↑")
+                        with col3:
+                            quality_color = "green" if confidence >= 8 else "orange" if confidence >= 6 else "red"
+                            quality_text = "High Quality" if confidence >= 8 else "Good Quality" if confidence >= 6 else "Basic Quality"
+                            st.markdown(f":{quality_color}[{quality_text}]")
                 
                 # Bulk operations for outreach
                 st.divider()
